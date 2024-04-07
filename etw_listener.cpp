@@ -1,5 +1,6 @@
 #include "etw_listener.h"
 #include "hh_scanner.h"
+#include "winmeta.h"
 
 #define EXECUTABLE_FLAGS (PAGE_EXECUTE | PAGE_EXECUTE_READ | PAGE_EXECUTE_READWRITE | PAGE_EXECUTE_WRITECOPY)
 #define MAX_PROCESSES 65536
@@ -102,6 +103,18 @@ bool isAllocationExecutable(std::uint32_t pid, LPVOID baseAddress)
     return isExec;
 }
 
+void runHHScan()
+{
+    // Initiate HH Scan
+    HHScanner hhunter(g_hh_args);
+    HHScanReport* report = hhunter.scan();
+    if (report)
+    {
+        hhunter.summarizeScan(report);
+        delete report;
+    }
+}
+
 bool ETWstart()
 {
     krabs::kernel_trace trace(L"HollowsHunter");
@@ -113,8 +126,7 @@ bool ETWstart()
     processProvider.add_on_event_callback([](const EVENT_RECORD& record, const krabs::trace_context& trace_context)
         {
             krabs::schema schema(record, trace_context.schema_locator);
-
-            if (schema.event_opcode() == 1)
+            if (schema.event_opcode() == WINEVENT_OPCODE_START)
             {
                 krabs::parser parser(schema);
                 std::string filename = parser.parse<std::string>(L"ImageFileName");
@@ -125,14 +137,7 @@ bool ETWstart()
                 setPid(pid);
 
                 std::cout << "Scanning New Process: " << filename << " (" << pid << ")" << std::endl;
-                // Initiate HH Scan
-                HHScanner hhunter(g_hh_args);
-                HHScanReport* report = hhunter.scan();
-                if (report)
-                {
-                    hhunter.summarizeScan(report);
-                    delete report;
-                }
+                runHHScan();
             }
         });
 
@@ -140,8 +145,7 @@ bool ETWstart()
     virtualAllocProvider.add_on_event_callback([](const EVENT_RECORD& record, const krabs::trace_context& trace_context)
         {
             krabs::schema schema(record, trace_context.schema_locator);
-
-            if (schema.event_opcode() == 98)
+            if (schema.event_opcode() == 98) // VirtualAlloc
             {
                 krabs::parser parser(schema);
                 std::uint32_t targetPid = parser.parse<std::uint32_t>(L"ProcessId");
@@ -161,14 +165,7 @@ bool ETWstart()
                 {
                     setPid(targetPid);
                     updateCooldown(targetPid);
-                    // Initiate HH Scan
-                    HHScanner hhunter(g_hh_args);
-                    HHScanReport* report = hhunter.scan();
-                    if (report)
-                    {
-                        hhunter.summarizeScan(report);
-                        delete report;
-                    }
+                    runHHScan();
                 }
             }
         });
