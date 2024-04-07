@@ -20,6 +20,8 @@ void setPid(std::uint32_t pid)
 {
     g_hh_args.pids_list.clear();
     g_hh_args.pids_list.insert(pid);
+
+    g_hh_args.pesieve_args.pid = pid;
 }
 
 void resetCooldown(std::uint32_t pid)
@@ -27,9 +29,9 @@ void resetCooldown(std::uint32_t pid)
     pidCooldown[pid] = 0;
 }
 
-BOOL isCooldown(std::uint32_t pid)
+bool isCooldown(std::uint32_t pid)
 {
-    if (0 != pidCooldown[pid])
+    if (pidCooldown[pid])
     {
         time_t now = 0;
         time(&now);
@@ -38,10 +40,10 @@ BOOL isCooldown(std::uint32_t pid)
             resetCooldown(pid);
         else
             //std::cout << "Skipping scan for: " << pid << "is in cooldown" << std::endl;
-            return FALSE;
+            return false;
     }
 
-    return TRUE;
+    return true;
 }
 
 void updateCooldown(std::uint32_t pid)
@@ -120,11 +122,9 @@ bool ETWstart()
 
                 // New process reset cooldown just in case
                 resetCooldown(pid);
+                setPid(pid);
 
                 std::cout << "Scanning New Process: " << filename << " (" << pid << ")" << std::endl;
-
-                setPid(pid);
-                g_hh_args.pesieve_args.pid = pid;
                 // Initiate HH Scan
                 HHScanner hhunter(g_hh_args);
                 HHScanReport* report = hhunter.scan();
@@ -152,7 +152,7 @@ bool ETWstart()
                 if (!isCooldown(targetPid))
                     return;
 
-                if (0 != targetPid)
+                if (targetPid)
                 {
                     doScan = isAllocationExecutable(targetPid, baseAddress);
                 }
@@ -161,7 +161,6 @@ bool ETWstart()
                 {
                     setPid(targetPid);
                     updateCooldown(targetPid);
-                    g_hh_args.pesieve_args.pid = targetPid;
                     // Initiate HH Scan
                     HHScanner hhunter(g_hh_args);
                     HHScanReport* report = hhunter.scan();
@@ -180,7 +179,6 @@ bool ETWstart()
     try {
         std::cout << "Starting listener..." << std::endl;
         trace.start();
-        std::cout << "Started" << std::endl;
     }
     catch (std::runtime_error& err) {
         std::cerr << "[ERROR] " << err.what() << std::endl;
